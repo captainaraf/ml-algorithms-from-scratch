@@ -54,3 +54,36 @@ class GATLayer(nn.Module):
             node_feats = node_feats.mean(dim=2)
 
         return node_feats
+
+gnn_layer_by_name = {
+    "GCN": GCNLayer,
+    "GAT": GATLayer
+}
+
+class GNNModel(nn.Module):
+    def __init__(self, in_features, hidden_features, out_features, num_layers=2, layer_name = "GCN", dp_rate=0.1, **kwargs):
+        super().__init__()
+        gnn_layer = gnn_layer_by_name[layer_name]
+        layers = []
+
+        in_channels, out_channels = in_features, hidden_features
+
+        for i in range(num_layers - 1):
+            layers += [
+                gnn_layer(
+                    in_channels, out_channels, **kwargs
+                ), 
+                nn.ReLU(),
+                nn.Dropout(dp_rate)
+            ]
+            in_channels = hidden_features
+        layers += [gnn_layer(in_channels, out_features, **kwargs)]
+        self.layers = nn.Sequential(*layers)
+
+    def forward(self, x, edge_index):
+        for l in self.layers:
+            if isinstance(l, (GCNLayer, GATLayer)):
+                x = l(x, edge_index)
+            else:
+                x = l(x)
+        return x
